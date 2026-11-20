@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DES431 Final - Interactive Reader</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <button id="menu" aria-label="Toggle sidebar">&#9776;</button>
+  <a class="brand" href="#/">DES431 <span>final reader</span></a>
+  <button id="searchbtn" class="pill">Search <kbd>/</kbd></button>
+  <button id="themebtn" class="pill" aria-label="Toggle theme">Theme</button>
+</header>
+<nav id="side"></nav>
+<main id="main"></main>
+<div id="pop" hidden></div>
+<div id="search" hidden>
+  <div class="box">
+    <input id="q" placeholder="Search all five lectures..." autocomplete="off">
+    <div id="results"></div>
+  </div>
+</div>
+<script src="data.js"></script>
+<script src="lib.js"></script>
+<script src="widgets.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
