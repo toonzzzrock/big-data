@@ -112,4 +112,6 @@ blockquote.exam{border-color:var(--acc2)}
 #results a:hover,#results a.on{background:var(--bg)}
 #results small{color:var(--mute);display:block}
 #results mark{background:var(--hi);color:inherit}
-@media(max-width:900px){nav#side{transform:translateX(-100%)}nav#side.show{transform:none}main#main{margin-left:0;padding:74px 14px}.layout{grid-template-columns:1fr}.toc{display:none}}
+.lab{overflow-x:auto}.lab .ctl input[type=range]{max-width:36vw}.content{min-width:0}.cards{grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr))}
+@media(max-width:900px){main#main{max-width:100vw;overflow-x:hidden}.lab .ctl{gap:8px}.tfilter{width:100%}}
+@media(max-width:900px){nav#side{transform:translateX(-100%)}nav#side.show{transform:none}main#main{margin-left:0;padding:74px 14px}.layout{grid-template-columns:minmax(0,1fr)}.toc{display:none}}

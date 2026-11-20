@@ -83,7 +83,7 @@
     return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
   };
   // 1,000 claims, 20 fraud (2 percent): the lecture's insurance example
-  L.fraudData = function (n = 1000, fraud = 20, sep = 1.6) {
+  L.fraudData = function (n = 1000, fraud = 20, sep = 3.0) {
     const r = L.rng(7);
     const scores = [], labels = [];
     for (let i = 0; i < n; i++) {
@@ -96,28 +96,25 @@
   };
 
   // ---- ML: polynomial fit for under/overfitting (lecture 11 section 5) ----
-  L.polyfit = function (xs, ys, deg, ridge = 1e-9) {
-    const n = deg + 1;
-    const A = Array.from({ length: n }, () => new Array(n + 1).fill(0));
-    xs.forEach((x, k) => {
-      const pw = Array.from({ length: 2 * n }, (_, i) => Math.pow(x, i));
-      for (let i = 0; i < n; i++) { for (let j = 0; j < n; j++) A[i][j] += pw[i + j]; A[i][n] += pw[i] * ys[k]; }
-    });
-    for (let i = 0; i < n; i++) A[i][i] += ridge;
-    for (let i = 0; i < n; i++) {
-      let p = i;
-      for (let r = i + 1; r < n; r++) if (Math.abs(A[r][i]) > Math.abs(A[p][i])) p = r;
-      [A[i], A[p]] = [A[p], A[i]];
-      for (let r = i + 1; r < n; r++) {
-        const f = A[r][i] / A[i][i];
-        for (let c = i; c <= n; c++) A[r][c] -= f * A[i][c];
+  // least squares via modified Gram-Schmidt on the Vandermonde matrix (stable for high degree)
+  L.polyfit = function (xs, ys, deg) {
+    const n = deg + 1, m = xs.length;
+    const Q = Array.from({ length: n }, (_, j) => xs.map((x) => Math.pow(x, j)));
+    const R = Array.from({ length: n }, () => new Array(n).fill(0));
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < j; i++) {
+        R[i][j] = Q[i].reduce((t, v, k) => t + v * Q[j][k], 0);
+        for (let k = 0; k < m; k++) Q[j][k] -= R[i][j] * Q[i][k];
       }
+      R[j][j] = Math.sqrt(Q[j].reduce((t, v) => t + v * v, 0)) || 1e-12;
+      for (let k = 0; k < m; k++) Q[j][k] /= R[j][j];
     }
+    const qty = Q.map((q) => q.reduce((t, v, k) => t + v * ys[k], 0));
     const w = new Array(n).fill(0);
     for (let i = n - 1; i >= 0; i--) {
-      let s = A[i][n];
-      for (let j = i + 1; j < n; j++) s -= A[i][j] * w[j];
-      w[i] = s / A[i][i];
+      let t = qty[i];
+      for (let j = i + 1; j < n; j++) t -= R[i][j] * w[j];
+      w[i] = t / R[i][i];
     }
     return w;
   };

@@ -86,7 +86,7 @@
       if (n.lec) el.innerHTML = `<circle r="${n.r}" fill="${COL[n.id]}"/><text text-anchor="middle" y="4">${esc(n.label.split(' ').slice(0, 2).join(' '))}</text>`;
       else el.innerHTML = `<circle r="${n.r}" fill="var(--panel)" stroke="var(--mute)"/><text y="${n.r + 12}" text-anchor="middle">${esc(n.label)}</text>`;
       let drag = false, moved = false;
-      el.addEventListener('pointerdown', (e) => { drag = true; moved = false; el.setPointerCapture(e.pointerId); });
+      el.addEventListener('pointerdown', (e) => { drag = true; moved = false; try { el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ } });
       el.addEventListener('pointermove', (e) => { if (!drag) return; moved = true; const r = svg.getBoundingClientRect(); n.x = (e.clientX - r.left) / r.width * W0; n.y = (e.clientY - r.top) / r.height * H0; place(); });
       el.addEventListener('pointerup', (e) => {
         drag = false;
@@ -142,9 +142,8 @@
       h3s.forEach((h) => {
         const det = document.createElement('details'); det.className = 'fold'; det.open = true;
         const sum = document.createElement('summary'); sum.innerHTML = h.innerHTML; sum.id = h.id;
-        h.before(det); det.append(sum);
+        h.before(det); det.append(sum); h.remove();
         while (det.nextSibling && !(det.nextSibling.nodeName === 'H3')) det.append(det.nextSibling);
-        h.remove();
       });
       const bar = document.createElement('div'); bar.className = 'foldbar';
       bar.innerHTML = '<button data-a="1">expand all</button><button data-a="0">collapse all</button>';

@@ -91,3 +91,42 @@ test('08 s7: window avg per year matches 8.5 / 8.3 / 7.0; rank and lag', () => {
   const g = L.windowFn(films, { partitionBy: null, orderBy: 'rating', desc: true });
   assert.equal(g.find((x) => x.id === 7).rank, 7);
 });
+
+test('11 s4.3: a good fraud model exists at some threshold: >=97% accuracy, most of 20 caught', () => {
+  const { scores, labels } = L.fraudData();
+  const c = L.confusion(scores, labels, 0.55), m = L.metrics(c);
+  assert.ok(m.accuracy >= 0.97 && m.accuracy <= 0.99, String(m.accuracy));
+  assert.ok(c.tp > 10);
+});
+
+test('11 s5: train error non-increasing in degree, validation has an interior minimum', () => {
+  const r = L.rng(3), f = (x) => Math.sin(2.2 * x);
+  const mk = (n) => Array.from({ length: n }, () => { const x = r() * 2 - 1; return [x, f(x) + 0.25 * L.gauss(r)]; });
+  const tr = mk(12), va = mk(40);
+  const e = [];
+  for (let d = 1; d <= 9; d++) {
+    const w = L.polyfit(tr.map((p) => p[0]), tr.map((p) => p[1]), d);
+    e.push([L.mse(tr.map((p) => p[1]), tr.map((p) => L.polyval(w, p[0]))), L.mse(va.map((p) => p[1]), va.map((p) => L.polyval(w, p[0])))]);
+  }
+  for (let i = 1; i < 9; i++) assert.ok(e[i][0] <= e[i - 1][0] + 1e-9, 'train up at ' + (i + 1));
+  const best = e.reduce((b, v, i) => (v[1] < e[b][1] ? i : b), 0);
+  assert.ok(best > 0 && best < 8, 'best at ' + (best + 1));
+  assert.ok(e[8][1] > e[best][1] * 3, 'degree 9 should overfit');
+});
+
+test('12 s3.9: chart chooser labels equal the lecture cheat-sheet table', () => {
+  const fs = require('fs');
+  const src = fs.readFileSync(__dirname + '/../src/widgets.js', 'utf8');
+  const md = fs.readFileSync(__dirname + '/../../summarize/12-Data-Visualization.md', 'utf8');
+  const sec = md.slice(md.indexOf('### 3.9'), md.indexOf('## 4.'));
+  const rows = [...sec.matchAll(/^\| (\w+) \| [^|]+ \| ([^|]+) \|$/gm)].filter((m) => m[1] !== 'Analysis');
+  assert.equal(rows.length, 8);
+  const lab = src.slice(src.indexOf('const A = ['), src.indexOf('const r = L.rng(5)'));
+  rows.forEach((m) => {
+    const block = lab.match(new RegExp("\\['" + m[1] + "'.*"))[0].toLowerCase();
+    m[2].split(',').map((x) => x.trim().toLowerCase().replace(/ \+ ci/, '')).forEach((chart) => {
+      const key = chart.split(' ')[0].replace(/-/g, '');
+      assert.ok(block.includes(key.replace('forecast', 'forecast')), m[1] + ': missing ' + chart);
+    });
+  });
+});

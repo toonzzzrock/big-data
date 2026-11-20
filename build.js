@@ -103,12 +103,15 @@ for (const L of lectures) {
 }
 
 // shared bold terms across lectures -> concept graph data
+const GENERIC = new Set(['all', 'console', 'interactive shell', 'definition', 'why it matters', 'example', 'note', 'key']);
 const termMap = new Map();
 for (const L of lectures) {
   for (const s of L.sections) {
     if (s.kind !== 'content') continue;
     for (const m of s.raw.matchAll(/\*\*([^*\n]{3,32}?)\*\*/g)) {
-      const t = m[1].replace(/[:.,;]+$/, '').trim();
+      if (/[:.,;]$/.test(m[1].trim())) continue; // labels like **Definition:** are not concepts
+      const t = m[1].trim();
+      if (GENERIC.has(t.toLowerCase())) continue;
       if (!/^[A-Za-z][A-Za-z0-9 \-/()]+$/.test(t)) continue;
       const k = t.toLowerCase();
       if (!termMap.has(k)) termMap.set(k, { t, lec: {}, sec: {} });

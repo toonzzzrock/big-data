@@ -106,7 +106,7 @@
           const newGroup = st.part && i > 0 && res[i - 1].year !== r.year;
           t.append(h('tr', { style: newGroup ? 'border-top:3px solid var(--c)' : '' }, [r.id, r.year, r.rating.toFixed(1), typeof v === 'number' ? (Number.isInteger(v) ? v : v.toFixed(1)) : v].map((c) => h('td', {}, String(c)))));
         });
-        tbl.innerHTML = ''; tbl.append(t, h('div', { class: 'note' }, st.fn === 'avg' ? 'Every row keeps its identity (unlike GROUP BY) and gains its group average: 2015 is 8.5, 2016 is 8.3, 2017 is 7.0.' : st.fn.match(/lag|lead/) ? 'The third argument is the default (0) used at the group edge where no neighbour exists.' : 'Ranking restarts in each partition. With no partition the whole table is one window.'));
+        tbl.innerHTML = ''; tbl.append(t, h('div', { class: 'note' }, st.fn === 'avg' ? (st.part ? 'Every row keeps its identity (unlike GROUP BY) and gains its group average: 2015 is 8.5, 2016 is 8.3, 2017 is 7.0.' : 'With no partition the whole table is one window: every row gets the same overall average.') : st.fn.match(/lag|lead/) ? 'The third argument is the default (0) used at the group edge where no neighbour exists.' : 'Ranking restarts in each partition. With no partition the whole table is one window.'));
       }
       draw();
     },
@@ -125,12 +125,12 @@
         const d = Array.from({ length: st.p }, (_, i) => (st.skew && i === 0 ? 3 : 1));
         const sc = L.schedule(d, st.k);
         svg.innerHTML = '';
-        const W0 = 640, x0 = 50, lh = Math.min(34, 170 / st.k), unit = W0 / sc.makespan;
+        const W0 = 640, x0 = 50, lh = Math.min(34, 170 / st.k - 4), unit = W0 / sc.makespan;
         sc.lanes.forEach((lane, i) => {
           svg.append(s('text', { x: 4, y: 20 + i * (lh + 4) + lh / 2 }, 'slot ' + (i + 1)));
           lane.forEach((t) => {
             const wave = Math.floor((t.p - 1) / st.k) + 1;
-            svg.append(s('rect', { x: x0 + t.start * unit, y: 14 + i * (lh + 4), width: (t.end - t.start) * unit - 2, height: lh, rx: 5, fill: 'var(--c)', opacity: 1 - 0.18 * (wave - 1) }),
+            svg.append(s('rect', { x: x0 + t.start * unit, y: 14 + i * (lh + 4), width: (t.end - t.start) * unit - 2, height: lh, rx: 5, fill: 'var(--c)', opacity: Math.max(0.35, 1 - 0.12 * (wave - 1)) }),
               s('text', { x: x0 + t.start * unit + 8, y: 14 + i * (lh + 4) + lh / 2 + 4, fill: '#fff', style: 'fill:#fff' }, 'P' + t.p));
           });
         });
@@ -166,7 +166,7 @@
         });
         stage.append(wrap, h('div', { class: 'note' }, 'blue = narrow (1 parent partition), orange = wide (all-to-all shuffle), pink = action, grey = source'));
         const wide = st.ops.filter((o) => L.WIDE.includes(o)).length;
-        msg.textContent = !act ? `No action yet: ${st.ops.length - 1} transformation(s) recorded, 0 records processed. Nothing runs.` : `Action present -> 1 job. ${wide} wide op(s) -> ${stages.length} stage(s). ` + (st.ran ? 'Job executed.' : 'Press run.');
+        msg.textContent = !act ? `No action yet: ${st.ops.length - 1} transformation(s) recorded, 0 records processed. Nothing runs.` : `${st.ops.filter((o) => L.ACTIONS.includes(o)).length} action(s) -> that many job(s), each cut into stages. For the plan up to the last action: ${wide} wide op(s) -> ${stages.length} stage(s). ` + (st.ran ? 'Job executed.' : 'Press run.');
         if (st.ran && !act) msg.textContent = 'Press an action first: transformations alone never trigger a job.';
       }
       draw();
@@ -228,9 +228,9 @@
     sub: 'The lecture example: 1,000 insurance claims, 20 fraud (2%). Slide the decision threshold and watch each metric move.',
     mount(root) {
       const D = L.fraudData();
-      const st = { thr: 0.5 };
+      const st = { thr: 0.55 };
       const svg = s('svg', { viewBox: '0 0 720 170' }), cm = h('div', {}), bars = h('div', {}), note = h('div', { class: 'note' });
-      const sl = slider('threshold', 0, 100, 50, 1, (v) => { st.thr = v / 100; draw(); });
+      const sl = slider('threshold', 0, 100, 55, 1, (v) => { st.thr = v / 100; draw(); });
       root.append(h('div', { class: 'ctl' }, sl, h('button', { class: 'b', onclick: () => { sl.querySelector('input').value = 100; sl.querySelector('b').textContent = 100; st.thr = 1.01; draw(); } }, 'predict everything legitimate'),
         h('button', { class: 'b', onclick: () => { sl.querySelector('input').value = 0; sl.querySelector('b').textContent = 0; st.thr = 0; draw(); } }, 'flag everything')), svg,
         h('div', { style: 'display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start' }, cm, bars), note);
@@ -272,7 +272,7 @@
       root.append(h('div', { class: 'ctl' }, slider('model complexity (polynomial degree)', 1, 9, 1, 1, (v) => { st.deg = v; draw(); })), svg, out);
       const errs = [];
       for (let d = 1; d <= 9; d++) {
-        const w = L.polyfit(tr.map((p) => p[0]), tr.map((p) => p[1]), d, 1e-7);
+        const w = L.polyfit(tr.map((p) => p[0]), tr.map((p) => p[1]), d);
         errs.push([L.mse(tr.map((p) => p[1]), tr.map((p) => L.polyval(w, p[0]))), L.mse(va.map((p) => p[1]), va.map((p) => L.polyval(w, p[0])))]);
       }
       const clamp = (v) => Math.max(-2, Math.min(2, v));
@@ -282,7 +282,7 @@
         svg.append(s('rect', { x: 20, y: 5, width: 320, height: 240, fill: 'none', stroke: 'currentColor', opacity: 0.2 }));
         let dpath = ''; for (let i = 0; i <= 100; i++) { const x = -1 + i / 50; dpath += (i ? 'L' : 'M') + X(x) + ' ' + Y(f(x)); }
         svg.append(s('path', { d: dpath, fill: 'none', stroke: '#868e96', 'stroke-dasharray': '4 4' }));
-        const w = L.polyfit(tr.map((p) => p[0]), tr.map((p) => p[1]), st.deg, 1e-7);
+        const w = L.polyfit(tr.map((p) => p[0]), tr.map((p) => p[1]), st.deg);
         let path = ''; for (let i = 0; i <= 100; i++) { const x = -1 + i / 50; path += (i ? 'L' : 'M') + X(x) + ' ' + Y(L.polyval(w, x)); }
         svg.append(s('path', { d: path, fill: 'none', stroke: 'var(--c)', 'stroke-width': 2.5 }));
         va.forEach((p) => svg.append(s('circle', { cx: X(p[0]), cy: Y(p[1]), r: 2.5, fill: '#868e96', opacity: 0.5 })));
@@ -294,7 +294,8 @@
         svg.append(s('circle', { cx: EX(st.deg), cy: EY(errs[st.deg - 1][0]), r: 5, fill: '#2f6fed' }), s('circle', { cx: EX(st.deg), cy: EY(errs[st.deg - 1][1]), r: 5, fill: '#e8590c' }),
           s('text', { x: 380, y: 14 }, 'blue = training error, orange = validation error'), s('text', { x: 560, y: 256 }, 'complexity'));
         const [a, b] = errs[st.deg - 1];
-        out.textContent = `degree ${st.deg}: training MSE ${a.toFixed(3)} | validation MSE ${b.toFixed(3)}\n` + (b > a * 3 && st.deg > 4 ? 'Training loss << validation loss: overfitting.' : st.deg <= 2 ? 'Poor on both sets: underfitting (too simple).' : 'Close to the best generalisation (lowest validation error).');
+        const best = errs.reduce((bi, e, i) => (e[1] < errs[bi][1] ? i : bi), 0) + 1;
+        out.textContent = `degree ${st.deg}: training MSE ${a.toFixed(3)} | validation MSE ${b.toFixed(3)}   (lowest validation error: degree ${best})\n` + (st.deg < best ? 'Too simple: poor on both training and unseen data (underfitting).' : st.deg === best ? 'Best generalisation: lowest validation error.' : 'Training loss < validation loss and the gap grows with complexity (overfitting).');
       }
       draw();
     },
@@ -305,11 +306,16 @@
     lec: 'l12', n: 3, title: 'Question to chart',
     sub: 'Pick the analytical question you are asking. The matching charts are drawn from sample data.',
     mount(root) {
+      // labels follow the cheat-sheet table in lecture 12 section 3.9
       const A = [
-        ['Descriptive', 'What happened?', ['histogram', 'bar', 'pie']], ['Diagnostic', 'Why did it happen?', ['scatter', 'heatmap', 'box']],
-        ['Trend', 'How is it changing?', ['line', 'area']], ['Predictive', 'What is likely to happen?', ['forecast']],
-        ['Comparative', 'How do these compare?', ['grouped', 'multiline']], ['Correlation', 'What moves together?', ['scatter', 'heatmap']],
-        ['Distribution', 'How is it spread?', ['histogram', 'violin']], ['Geospatial', 'Where is it happening?', ['bubble']],
+        ['Descriptive', 'What happened?', [['Histogram', 'histogram'], ['Bar chart', 'bar'], ['Pie chart', 'pie']]],
+        ['Diagnostic', 'Why did it happen?', [['Scatter plot', 'scatter'], ['Heatmap', 'heatmap'], ['Box plot', 'box']]],
+        ['Trend', 'How is it changing?', [['Line chart', 'line'], ['Area chart', 'area']]],
+        ['Predictive', 'What is likely to happen?', [['Regression plot', 'regression'], ['Forecast chart with confidence interval', 'forecast']]],
+        ['Comparative', 'How do these compare?', [['Grouped bar chart', 'grouped'], ['Multi-line chart', 'multiline']]],
+        ['Correlation', 'What moves together?', [['Scatter plot', 'scatter'], ['Correlation matrix', 'corrmatrix']]],
+        ['Distribution', 'How is it spread?', [['Histogram', 'histogram'], ['Violin plot', 'violin']]],
+        ['Geospatial', 'Where is it happening?', [['Choropleth map', 'choropleth'], ['Bubble map', 'bubble']]],
       ];
       const r = L.rng(5), data = Array.from({ length: 12 }, (_, i) => 20 + 12 * Math.sin(i / 2) + r() * 10);
       const draws = {
@@ -325,6 +331,9 @@
         grouped: (g) => [[30, 45], [55, 40], [35, 60]].forEach(([a, b], i) => g.append(s('rect', { x: 14 + i * 48, y: 95 - a, width: 18, height: a, fill: 'var(--c)' }), s('rect', { x: 33 + i * 48, y: 95 - b, width: 18, height: b, fill: '#e8590c' }))),
         multiline: (g) => { [0, 1, 2].forEach((k) => g.append(s('path', { d: data.map((v, i) => (i ? 'L' : 'M') + (10 + i * 13) + ' ' + (100 - (v + k * 12 - 10 + Math.sin(i + k) * 4) * 1.5)).join(' '), fill: 'none', stroke: ['#2f6fed', '#e8590c', '#2b8a3e'][k], 'stroke-width': 2 }))); },
         violin: (g) => [0, 1].forEach((i) => g.append(s('path', { d: `M${45 + i * 70} 10 C${75 + i * 70} 30 ${75 + i * 70} 70 ${45 + i * 70} 95 C${15 + i * 70} 70 ${15 + i * 70} 30 ${45 + i * 70} 10 Z`, fill: 'var(--c)', opacity: 0.55 }))),
+        regression: (g) => { data.forEach((v, i) => g.append(s('circle', { cx: 12 + i * 12, cy: 95 - v * 1.6 - r() * 8, r: 3, fill: 'var(--c)', opacity: 0.6 }))); g.append(s('line', { x1: 10, y1: 80, x2: 150, y2: 30, stroke: '#e03131', 'stroke-width': 2 })); },
+        corrmatrix: (g) => { for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) g.append(s('rect', { x: 28 + i * 20, y: 8 + j * 19, width: 18, height: 17, fill: i === j ? 'var(--c)' : '#e8590c', opacity: i === j ? 1 : 0.15 + 0.7 * Math.abs(Math.sin(i * 3 + j * 5)) })); },
+        choropleth: (g) => { [[10, 10, 60, 45], [70, 10, 60, 30], [10, 55, 45, 45], [55, 40, 75, 60], [130, 10, 22, 90]].forEach(([x, y, w, hh], i) => g.append(s('rect', { x, y, width: w, height: hh, fill: 'var(--c)', opacity: [0.9, 0.3, 0.55, 0.15, 0.7][i], stroke: 'var(--bg)', 'stroke-width': 2 }))); },
         bubble: (g) => [[40, 40, 14], [90, 55, 22], [125, 30, 9], [60, 75, 11]].forEach(([x, y, rr]) => g.append(s('circle', { cx: x, cy: y, r: rr, fill: 'var(--c)', opacity: 0.55 }))),
       };
       const out = h('div', { style: 'display:flex;gap:12px;flex-wrap:wrap;margin-top:8px' });
@@ -335,7 +344,7 @@
         btns.forEach((b, j) => b.classList.toggle('on', i === j));
         out.innerHTML = '';
         out.append(h('div', { style: 'flex-basis:100%;font-size:14px' }, h('b', {}, A[i][0] + ' analysis'), ' asks "' + A[i][1] + '"'));
-        A[i][2].forEach((c) => { const g = s('g', {}); draws[c](g); out.append(h('div', { style: 'text-align:center;border:1px solid var(--line);border-radius:10px;padding:6px;background:var(--bg);width:190px' }, s('svg', { viewBox: '0 0 160 110', style: 'width:100%' }, g), h('div', { class: 'note', style: 'margin:0' }, c))); });
+        A[i][2].forEach(([label, c]) => { const g = s('g', {}); draws[c](g); out.append(h('div', { style: 'text-align:center;border:1px solid var(--line);border-radius:10px;padding:6px;background:var(--bg);width:190px' }, s('svg', { viewBox: '0 0 160 110', style: 'width:100%' }, g), h('div', { class: 'note', style: 'margin:0' }, label))); });
       }
       pick(0);
     },
