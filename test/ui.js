@@ -66,6 +66,33 @@ const bad = (m) => { fails.push(m); console.log('FAIL', m); };
     const nres = await pg.locator('#results a').count();
     if (nres < 3) bad(`${w}px search: only ${nres} results`);
     await check(`${w}px home`);
+    await pg.keyboard.press('Escape');
+    // tabs: each visible + clickable, track tab is exclusive (own sidebar, own prev/next chain)
+    const tracks = await pg.evaluate(() => window.DATA.tracks.map((t) => ({ id: t.id, secs: t.sections.map((s) => s.id) })));
+    if (tracks.length !== 2) bad(`${w}px expected 2 tracks, got ${tracks.length}`);
+    const tb = await pg.evaluate(() => { const t = document.querySelector('#tabs'); return [t.scrollWidth, t.clientWidth]; });
+    if (tb[0] > tb[1]) bad(`${w}px tab bar clipped: scrollWidth ${tb[0]} > clientWidth ${tb[1]}`);
+    for (const t of tracks) {
+      await pg.goto(URL + '#/'); await pg.reload();
+      const tab = pg.locator(`#tabs a[data-t="${t.id}"]`);
+      const bb = await tab.boundingBox();
+      if (!bb || bb.x < 0 || bb.x + bb.width > w) bad(`${w}px tab ${t.id} not fully visible: ${JSON.stringify(bb)}`);
+      await tab.click();
+      await pg.waitForFunction((id) => location.hash.startsWith('#/' + id + '/'), t.id);
+      const st = await pg.evaluate(() => ({ on: [...document.querySelectorAll('#tabs a.on')].map((a) => a.dataset.t), nl: document.querySelectorAll('#side .nl').length, si: document.querySelectorAll('#side a.si').length }));
+      if (st.on.join() !== t.id) bad(`${w}px tab ${t.id}: active tabs ${st.on}`);
+      if (st.nl !== 1 || st.si !== t.secs.length) bad(`${w}px tab ${t.id}: sidebar not exclusive nl=${st.nl} si=${st.si}/${t.secs.length}`);
+      for (const [i, s] of t.secs.entries()) {
+        await pg.goto(URL + `#/${t.id}/${s}`);
+        const nav = await pg.evaluate(() => [...document.querySelectorAll('.nav2 a')].map((a) => a.getAttribute('href')));
+        if (nav.some((h) => !h.startsWith(`#/${t.id}/`))) bad(`${w}px ${t.id}/${s}: prev/next leaves track ${nav}`);
+        if (nav.length !== (i === 0 || i === t.secs.length - 1 ? 1 : 2)) bad(`${w}px ${t.id}/${s}: ${nav.length} nav links`);
+        await check(`${w}px ${t.id}/${s}`);
+      }
+      // lectures tab returns to the map
+      await pg.locator('#tabs a[data-t="lec"]').click();
+      if (!(await pg.waitForSelector('#map', { timeout: 3000 }).catch(() => null))) bad(`${w}px lectures tab did not return home`);
+    }
     if (errs.length) bad(`${w}px page errors: ${[...new Set(errs)].slice(0, 3).join(' | ')}`);
     await ctx.close();
   }

@@ -1,10 +1,12 @@
 (function () {
   const D = window.DATA;
-  const COL = { l08: '#e8590c', l09: '#2f6fed', l10: '#7048e8', l11: '#2b8a3e', l12: '#c2255c' };
+  const COL = { l08: '#e8590c', l09: '#2f6fed', l10: '#7048e8', l11: '#2b8a3e', l12: '#c2255c', hql: '#e0a100', pys: '#0c8599' };
   const $ = (q, r) => (r || document).querySelector(q);
   const $$ = (q, r) => [...(r || document).querySelectorAll(q)];
   const main = $('#main'), side = $('#side'), pop = $('#pop');
-  const lecById = Object.fromEntries(D.lectures.map((l) => [l.id, l]));
+  const tracks = D.tracks || [];
+  const isTrack = (id) => tracks.some((t) => t.id === id);
+  const lecById = Object.fromEntries(D.lectures.concat(tracks).map((l) => [l.id, l]));
   const store = {
     get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } },
     set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
@@ -13,6 +15,14 @@
   const key = (l, s) => l + '/' + s.id;
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const ordered = D.lectures.flatMap((l) => l.sections.map((s) => [l, s]));
+  // each tab is its own sequence: prev/next and arrow keys never cross between lectures and a track
+  const seqs = Object.fromEntries(tracks.map((t) => [t.id, t.sections.map((s) => [t, s])]));
+  const seqFor = (lid) => seqs[lid] || ordered;
+
+  // ---------- tabs ----------
+  const tabs = $('#tabs');
+  tabs.innerHTML = `<a href="#/" data-t="lec">Lectures</a>` + tracks.map((t) => `<a href="#/${t.id}" data-t="${t.id}" style="--c:${COL[t.id]}">${esc(t.label)}</a>`).join('');
+  const setTab = (lid) => { const t = isTrack(lid) ? lid : 'lec'; $$('a', tabs).forEach((a) => a.classList.toggle('on', a.dataset.t === t)); };
 
   // ---------- theme ----------
   const setTheme = (t) => { document.documentElement.dataset.theme = t; store.set('theme', t); };
@@ -24,7 +34,7 @@
   const GROUP = { content: null, summary: 'Wrap-up', partA: 'Practice', partB: 'Practice', partC: 'Practice' };
   function renderSide(cur) {
     side.innerHTML = '';
-    D.lectures.forEach((l) => {
+    (cur && isTrack(cur.l) ? [lecById[cur.l]] : D.lectures).forEach((l) => {
       const open = cur && cur.l === l.id;
       const wrap = document.createElement('div'); wrap.className = 'nl';
       const total = l.sections.filter((s) => s.kind === 'content').length;
@@ -109,16 +119,16 @@
 
   // ---------- section view ----------
   function section(lid, sid) {
-    const l = lecById[lid], idx = ordered.findIndex(([a, b]) => a.id === lid && b.id === sid);
-    if (idx < 0) return home();
-    const sec = ordered[idx][1];
-    store.set('last', `${lid}/${sid}`);
+    const seq = seqFor(lid), l = lecById[lid], idx = seq.findIndex(([a, b]) => a.id === lid && b.id === sid);
+    if (idx < 0) return isTrack(lid) ? location.replace(`#/${lid}/${l.sections[0].id}`) : home();
+    const sec = seq[idx][1], tr = isTrack(lid);
+    store.set(tr ? 'last:' + lid : 'last', `${lid}/${sid}`);
     renderSide({ l: lid, s: sid });
-    const prev = ordered[idx - 1], next = ordered[idx + 1];
+    const prev = seq[idx - 1], next = seq[idx + 1];
     const label = ([a, b]) => `<small>${a.num} ${esc(a.title)}</small>${b.n ? b.n + '. ' : ''}${esc(b.title)}`;
     const isDone = !!done[key(lid, sec)];
     main.style.setProperty('--c', COL[lid]);
-    main.innerHTML = `<div class="crumb"><a href="#/">Map</a> / <a href="#/${lid}/${l.sections[0].id}">${l.num} ${esc(l.title)}</a></div>
+    main.innerHTML = `<div class="crumb">${tr ? `<a href="#/${lid}/${l.sections[0].id}">${esc(l.label)}</a> / ${idx + 1} of ${seq.length}` : `<a href="#/">Map</a> / <a href="#/${lid}/${l.sections[0].id}">${l.num} ${esc(l.title)}</a>`}</div>
     <div class="sechead"><h1>${sec.n ? sec.n + '. ' : ''}${esc(sec.title)}</h1>${sec.kind === 'content' ? `<button class="donebtn ${isDone ? 'on' : ''}" id="donebtn">${isDone ? '&#10003; understood' : 'mark understood'}</button>` : ''}</div>
     <div class="layout"><div><div id="labs"></div><div class="content" id="content">${sec.html}</div>
     <div class="nav2">${prev ? `<a href="#/${prev[0].id}/${prev[1].id}">&larr; ${label(prev)}</a>` : '<span></span>'}${next ? `<a href="#/${next[0].id}/${next[1].id}">${label(next)} &rarr;</a>` : '<span></span>'}</div></div>
@@ -207,7 +217,7 @@
   }
 
   // ---------- search ----------
-  const idx = ordered.map(([l, s]) => ({ l, s, t: (s.title + ' ' + s.text), lt: (s.title + ' ' + s.text).toLowerCase() }));
+  const idx = ordered.concat(...Object.values(seqs)).map(([l, s]) => ({ l, s, t: (s.title + ' ' + s.text), lt: (s.title + ' ' + s.text).toLowerCase() }));
   const qEl = $('#q'), resEl = $('#results'), box = $('#search');
   let cur = 0;
   function openSearch() { box.hidden = false; qEl.value = ''; resEl.innerHTML = ''; qEl.focus(); }
@@ -222,7 +232,7 @@
     resEl.innerHTML = hits.map(({ e }) => {
       const p = e.lt.indexOf(terms[0]), snip = e.t.slice(Math.max(0, p - 50), p + 110);
       const m = esc(snip).replace(new RegExp('(' + terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'ig'), '<mark>$1</mark>');
-      return `<a href="#/${e.l.id}/${e.s.id}"><b>${e.s.n ? e.s.n + '. ' : ''}${esc(e.s.title)}</b><small>${e.l.num} ${esc(e.l.title)}</small><small>...${m}...</small></a>`;
+      return `<a href="#/${e.l.id}/${e.s.id}"><b>${e.s.n ? e.s.n + '. ' : ''}${esc(e.s.title)}</b><small>${e.l.label ? esc(e.l.label) + ' tutorial' : e.l.num + ' ' + esc(e.l.title)}</small><small>...${m}...</small></a>`;
     }).join('') || '<a>No match</a>';
     cur = 0; $$('a', resEl)[0] && $$('a', resEl)[0].classList.add('on');
   }
@@ -239,8 +249,8 @@
     if (e.target.matches('input, textarea, select')) return;
     if (e.key === '/' || ((e.ctrlKey || e.metaKey) && e.key === 'k')) { e.preventDefault(); openSearch(); }
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      const m = location.hash.match(/#\/(l\d+)\/(s\d+)/); if (!m) return;
-      const i = ordered.findIndex(([a, b]) => a.id === m[1] && b.id === m[2]), t = ordered[i + (e.key === 'ArrowRight' ? 1 : -1)];
+      const m = location.hash.match(/#\/(l\d+|[a-z]+)\/(s\d+)/); if (!m || !lecById[m[1]]) return;
+      const seq = seqFor(m[1]), i = seq.findIndex(([a, b]) => a.id === m[1] && b.id === m[2]), t = i < 0 ? null : seq[i + (e.key === 'ArrowRight' ? 1 : -1)];
       if (t) location.hash = `#/${t[0].id}/${t[1].id}`;
     }
   });
@@ -248,8 +258,12 @@
   // ---------- router ----------
   function route() {
     pop.hidden = true;
-    const m = location.hash.match(/^#\/(l\d+)\/(s\d+)/);
-    if (m && lecById[m[1]]) section(m[1], m[2]); else home();
+    const m = location.hash.match(/^#\/(l\d+|[a-z]+)(?:\/(s\d+))?/);
+    const lid = m && lecById[m[1]] ? m[1] : null;
+    setTab(lid);
+    if (lid && m[2]) section(lid, m[2]);
+    else if (lid && isTrack(lid)) location.replace(`#/${store.get('last:' + lid, `${lid}/${lecById[lid].sections[0].id}`)}`);
+    else home();
   }
   addEventListener('hashchange', route);
   route();

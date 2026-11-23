@@ -48,11 +48,11 @@ function kindOf(title) {
   return 'content';
 }
 
-function parseLecture(file) {
-  const raw = fs.readFileSync(path.join(SRC, file), 'utf8');
+function parseLecture(file, dir = SRC, trackId = null) {
+  const raw = fs.readFileSync(path.join(dir, file), 'utf8');
   const tokens = marked.lexer(raw);
   const links = tokens.links;
-  const num = file.slice(0, 2);
+  const num = trackId ? '' : file.slice(0, 2);
   let title = '';
   const metaTokens = [];
   const sections = [];
@@ -84,12 +84,12 @@ function parseLecture(file) {
       raw: rawText,
     };
   });
-  return { id: 'l' + num, num, file, title: title.replace(/^Lecture \d+\s*[—-]\s*/, ''), meta: mk(metaTokens), sections: out };
+  return { id: trackId || 'l' + num, num, file, title: title.replace(/^Lecture \d+\s*[—-]\s*/, ''), meta: mk(metaTokens), sections: out };
 }
 function this_inline(t) { return marked.parseInline(t.text).replace(/<[^>]+>/g, ''); }
 
 const files = fs.readdirSync(SRC).filter((f) => /^\d\d-.*\.md$/.test(f) && !f.startsWith('00')).sort();
-const lectures = files.map(parseLecture);
+const lectures = files.map((f) => parseLecture(f));
 
 // glossary from Part A tables
 const glossary = [];
@@ -126,8 +126,16 @@ const terms = [...termMap.values()]
   .sort((a, b) => Object.values(b.lec).reduce((x, y) => x + y, 0) - Object.values(a.lec).reduce((x, y) => x + y, 0))
   .slice(0, 36);
 
+// learn-from-scratch tracks: learn/*.md -> separate tabs, kept out of the lecture map/glossary
+const LEARN = path.resolve(__dirname, '../learn');
+const TRACKS = [['hql', 'hiveql.md', 'HiveQL'], ['pys', 'pyspark.md', 'PySpark']];
+const tracks = TRACKS.filter(([, f]) => fs.existsSync(path.join(LEARN, f)))
+  .map(([id, f, label]) => ({ ...parseLecture(f, LEARN, id), label }));
+
+const strip = (L) => ({ ...L, sections: L.sections.map(({ raw, ...r }) => r) });
 const data = {
-  lectures: lectures.map((L) => ({ ...L, sections: L.sections.map(({ raw, ...r }) => r) })),
+  lectures: lectures.map(strip),
+  tracks: tracks.map(strip),
   glossary,
   terms,
 };
@@ -137,5 +145,6 @@ fs.writeFileSync(path.join(OUT, 'data.js'), 'window.DATA=' + JSON.stringify(data
 for (const f of fs.readdirSync(path.join(__dirname, 'src'))) fs.copyFileSync(path.join(__dirname, 'src', f), path.join(OUT, f));
 console.log(JSON.stringify({
   lectures: lectures.map((L) => ({ id: L.id, sections: L.sections.length, tables: (L.sections.map((s) => s.html).join('').match(/<table/g) || []).length, diagrams: (L.sections.map((s) => s.html).join('').match(/class="diagram"/g) || []).length })),
+  tracks: tracks.map((T) => ({ id: T.id, sections: T.sections.length })),
   glossary: glossary.length, sharedTerms: terms.length,
 }));
